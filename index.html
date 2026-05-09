@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Financial Dashboard</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F9FAFB; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #F3F4F6; }
+    ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+    .tab-btn { transition: color 0.15s, border-color 0.15s; }
+    select { appearance: auto; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useCallback, useEffect, useRef } = React;
+
+    /* ─────────────────────────────────────────────
+       CONSTANTS
+    ───────────────────────────────────────────── */
+    const TABS = [
+      { id: 'dashboard', label: 'Dashboard' },
+      { id: 'monthly',   label: 'Monthly Breakdown' },
+      { id: 'recurring', label: 'Recurring', badge: '1', badgeType: 'blue' },
+      { id: 'loans',     label: 'Loans' },
+      { id: 'credits',   label: 'Credits' },
+    ];
+
+    const MONTHS = [
+      'January','February','March','April','May','June',
+      'July','August','September','October','November','December'
+    ];
+
+    /* ─────────────────────────────────────────────
+       LOAN DATA  (from Google Drive: Loan Tracker)
+    ───────────────────────────────────────────── */
+    const INITIAL_LOANS = [
+      // Sebastian ───────────────────────────────
+      { id:  1, person:'Sebastian', amount:  617.00, currency:'USD', reason:'BKK - HKG flight',                      dateLoaned:'2026-04-30', expectedBack:null,        paymentDate:'2026-04-27', notes:'Paid thru Bobby',                          status:'paid',   flagged:false },
+      { id:  2, person:'Sebastian', amount:  644.78, currency:'USD', reason:'HKG - BKK Flight',                      dateLoaned:'2026-05-05', expectedBack:null,        paymentDate:'2026-04-27', notes:'Paid thru Bobby',                          status:'paid',   flagged:false },
+      { id:  3, person:'Sebastian', amount:  248.00, currency:'USD', reason:'Fast Track service',                    dateLoaned:'2026-05-05', expectedBack:null,        paymentDate:'2026-05-08', notes:'8,000 THB; 245 USD payment received',      status:'paid',   flagged:false },
+      // Emil ────────────────────────────────────
+      { id:  4, person:'Emil',      amount:  893.36, currency:'USD', reason:'BKK - HKG flight',                      dateLoaned:'2026-04-30', expectedBack:null,        paymentDate:null,         notes:'Paid thru Bobby',                          status:'unpaid', flagged:false },
+      { id:  5, person:'Emil',      amount:  825.10, currency:'USD', reason:'HKG - BKK Flight',                      dateLoaned:'2026-05-05', expectedBack:null,        paymentDate:null,         notes:'Paid thru Bobby',                          status:'unpaid', flagged:false },
+      // Axel ────────────────────────────────────
+      { id:  6, person:'Axel',      amount:  893.36, currency:'USD', reason:'BKK - HKG flight',                      dateLoaned:'2026-04-30', expectedBack:null,        paymentDate:null,         notes:'Paid thru Bobby',                          status:'unpaid', flagged:false },
+      { id:  7, person:'Axel',      amount:  825.10, currency:'USD', reason:'HKG - BKK Flight',                      dateLoaned:'2026-05-05', expectedBack:null,        paymentDate:null,         notes:'Paid thru Bobby',                          status:'unpaid', flagged:false },
+      // Kassu ───────────────────────────────────
+      { id:  8, person:'Kassu',     amount: 3751.04, currency:'USD', reason:'Buying books',                          dateLoaned:'2025-07-19', expectedBack:null,        paymentDate:null,         notes:'3200 EUR; paid from BF',                   status:'unpaid', flagged:true  },
+      { id:  9, person:'Kassu',     amount:  500.00, currency:'USD', reason:'FB account top-up',                     dateLoaned:'2025-08-31', expectedBack:null,        paymentDate:null,         notes:'Paid from BF',                             status:'unpaid', flagged:true  },
+      { id: 10, person:'Kassu',     amount:  500.00, currency:'USD', reason:'TT account top-up',                     dateLoaned:'2025-08-31', expectedBack:null,        paymentDate:null,         notes:'Paid from BF',                             status:'unpaid', flagged:true  },
+      { id: 11, person:'Kassu',     amount:  500.00, currency:'USD', reason:'Snapchat account top-up',               dateLoaned:'2025-08-31', expectedBack:null,        paymentDate:null,         notes:'Paid from BF',                             status:'unpaid', flagged:true  },
+      { id: 12, person:'Kassu',     amount: 3393.52, currency:'USD', reason:'Business flights',                      dateLoaned:'2025-08-14', expectedBack:null,        paymentDate:null,         notes:'2895 EUR; paid from Norelie',               status:'unpaid', flagged:true  },
+      { id: 13, person:'Kassu',     amount:  351.66, currency:'USD', reason:'FB account top-up',                     dateLoaned:'2025-08-15', expectedBack:null,        paymentDate:null,         notes:'300 EUR; paid from Shakira account',        status:'unpaid', flagged:true  },
+      { id: 14, person:'Kassu',     amount:  300.00, currency:'USD', reason:'TT account top-up',                     dateLoaned:'2025-08-19', expectedBack:null,        paymentDate:null,         notes:'Paid from BF',                             status:'unpaid', flagged:true  },
+      { id: 15, person:'Kassu',     amount:  300.00, currency:'USD', reason:'TT account top-up',                     dateLoaned:'2025-08-20', expectedBack:null,        paymentDate:null,         notes:'Paid from BF',                             status:'unpaid', flagged:true  },
+      { id: 16, person:'Kassu',     amount:  351.66, currency:'USD', reason:'FB account top-up',                     dateLoaned:'2025-08-21', expectedBack:null,        paymentDate:null,         notes:'300 EUR; paid from Shakira account',        status:'unpaid', flagged:true  },
+      { id: 17, person:'Kassu',     amount:  674.02, currency:'USD', reason:'Change of business flight',             dateLoaned:'2025-09-29', expectedBack:null,        paymentDate:null,         notes:'575 EUR; paid from WIO 769',               status:'unpaid', flagged:true  },
+      { id: 18, person:'Kassu',     amount: 3164.94, currency:'USD', reason:'BKK Airbnb',                            dateLoaned:'2026-03-11', expectedBack:null,        paymentDate:null,         notes:'2700 EUR',                                 status:'unpaid', flagged:false },
+      { id: 19, person:'Kassu',     amount:  765.59, currency:'USD', reason:'RVN - HEL flight',                      dateLoaned:'2026-03-24', expectedBack:null,        paymentDate:null,         notes:'660.38 EUR',                               status:'unpaid', flagged:false },
+      { id: 20, person:'Kassu',     amount: 4971.00, currency:'USD', reason:'HEL - BKK Flight',                      dateLoaned:'2026-03-24', expectedBack:null,        paymentDate:null,         notes:'',                                         status:'unpaid', flagged:false },
+      { id: 21, person:'Kassu',     amount:  411.71, currency:'USD', reason:'HEL-BKK Fast track',                    dateLoaned:'2026-03-24', expectedBack:null,        paymentDate:null,         notes:'',                                         status:'unpaid', flagged:false },
+      { id: 22, person:'Kassu',     amount: 1383.30, currency:'USD', reason:'Moppet Luxury Sale (Lida\'s Dior Bag)', dateLoaned:'2026-04-05', expectedBack:'2026-04-05', paymentDate:'2026-04-05', notes:'',                                        status:'paid',   flagged:false },
+      { id: 23, person:'Kassu',     amount: 1098.00, currency:'USD', reason:'Koh Samui Hotel',                       dateLoaned:'2026-04-24', expectedBack:null,        paymentDate:null,         notes:'938 EUR',                                  status:'unpaid', flagged:false },
+      { id: 24, person:'Kassu',     amount:  894.67, currency:'USD', reason:'BKK - Koh Samui flight',                dateLoaned:'2026-04-24', expectedBack:null,        paymentDate:null,         notes:'',                                         status:'unpaid', flagged:false },
+      { id: 25, person:'Kassu',     amount: 8425.13, currency:'USD', reason:'BKK - HEL (via FRA)',                   dateLoaned:'2026-05-08', expectedBack:null,        paymentDate:null,         notes:'From $9,011.75',                           status:'unpaid', flagged:false },
+      { id: 26, person:'Kassu',     amount:  434.01, currency:'USD', reason:'ARN to TKU Flight (Extra Luggage)',      dateLoaned:'2026-05-08', expectedBack:null,        paymentDate:null,         notes:'',                                         status:'unpaid', flagged:false },
+      { id: 27, person:'Kassu',     amount:  183.55, currency:'USD', reason:'Van transport',                         dateLoaned:'2026-05-08', expectedBack:null,        paymentDate:null,         notes:'',                                         status:'unpaid', flagged:false },
+      // Michael ─────────────────────────────────
+      { id: 28, person:'Michael',   amount: 2145.90, currency:'USD', reason:'Initial Balance Payment (Rent + Logistics)', dateLoaned:'2026-04-16', expectedBack:'2026-04-16', paymentDate:'2026-04-16', notes:'',                                   status:'paid',   flagged:false },
+      { id: 29, person:'Michael',   amount: 2800.00, currency:'USD', reason:'Rent - Partial Month (Apr 03–Apr 30)',  dateLoaned:'2026-04-30', expectedBack:'2026-05-02', paymentDate:'2026-05-04', notes:'',                                        status:'paid',   flagged:false },
+      { id: 30, person:'Michael',   amount: 3000.00, currency:'USD', reason:'May Rent - Full Month (May 01–May 31)', dateLoaned:'2026-05-31', expectedBack:'2026-06-02', paymentDate:null,         notes:'',                                        status:'unpaid', flagged:false },
+      { id: 31, person:'Michael',   amount:  617.00, currency:'USD', reason:'BKK - HKG flight',                      dateLoaned:'2026-04-30', expectedBack:null,        paymentDate:'2026-05-08', notes:'Paid thru Bobby',                          status:'paid',   flagged:false },
+      { id: 32, person:'Michael',   amount:  644.78, currency:'USD', reason:'HKG - BKK Flight',                      dateLoaned:'2026-05-05', expectedBack:null,        paymentDate:'2026-05-08', notes:'Paid thru Bobby',                          status:'paid',   flagged:false },
+      { id: 33, person:'Michael',   amount:  140.00, currency:'USD', reason:'Fast track service',                    dateLoaned:'2026-05-05', expectedBack:null,        paymentDate:'2026-05-04', notes:'4,500 THB (overpayment from rent)',         status:'paid',   flagged:false },
+    ];
+
+    /* ─────────────────────────────────────────────
+       UTILITIES
+    ───────────────────────────────────────────── */
+    function fmtDate(s) {
+      if (!s) return '—';
+      const d = new Date(s + 'T12:00:00');
+      return d.toLocaleDateString('en-US', { month:'short', day:'2-digit', year:'numeric' });
+    }
+
+    function fmtMoney(amount, currency) {
+      const sym = currency === 'EUR' ? '€' : currency === 'THB' ? '฿' : '$';
+      return sym + amount.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    }
+
+    function isOverdue(expectedBack, status) {
+      if (status === 'paid' || !expectedBack) return false;
+      return new Date(expectedBack + 'T12:00:00') < new Date();
+    }
+
+    /* ─────────────────────────────────────────────
+       STATUS CIRCLE
+    ───────────────────────────────────────────── */
+    function StatusCircle({ status, onClick }) {
+      if (status === 'paid') {
+        return (
+          <button
+            onClick={onClick}
+            title="Mark as unpaid"
+            className="w-5 h-5 rounded-full bg-green-500 border-2 border-green-500 flex items-center justify-center hover:bg-green-600 transition-colors shadow-sm"
+          >
+            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+        );
+      }
+      return (
+        <button
+          onClick={onClick}
+          title="Mark as paid"
+          className="w-5 h-5 rounded-full border-2 border-gray-300 bg-white hover:border-blue-400 hover:bg-blue-50 transition-colors"
+        />
+      );
+    }
+
+    /* ─────────────────────────────────────────────
+       SUMMARY CARD
+    ───────────────────────────────────────────── */
+    function SummaryCard({ title, value, subtitle, accent }) {
+      return (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex flex-col gap-1">
+          <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">{title}</span>
+          <span className={`text-2xl font-bold ${accent}`}>{value}</span>
+          {subtitle && <span className="text-xs text-gray-400 mt-0.5">{subtitle}</span>}
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────
+       ADD LOAN MODAL
+    ───────────────────────────────────────────── */
+    function AddLoanModal({ onClose, onAdd, onUpdate, persons, initial }) {
+      const today = new Date().toISOString().split('T')[0];
+      const isEdit = !!initial;
+      const [form, setForm] = useState({
+        useExisting: true,
+        person: initial?.person || persons[0] || '',
+        newPerson: '',
+        amount: initial?.amount != null ? String(initial.amount) : '',
+        currency: initial?.currency || 'USD',
+        reason: initial?.reason || '',
+        dateLoaned: initial?.dateLoaned || today,
+        expectedBack: initial?.expectedBack || '',
+        paymentDate: initial?.paymentDate || '',
+        notes: initial?.notes || '',
+      });
+      const [errors, setErrors] = useState({});
+
+      function set(key, val) { setForm(f => ({...f, [key]: val})); }
+
+      function validate() {
+        const e = {};
+        const name = form.useExisting ? form.person : form.newPerson.trim();
+        if (!name) e.person = 'Required';
+        if (!form.amount || isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0) e.amount = 'Enter a valid amount';
+        if (!form.reason.trim()) e.reason = 'Required';
+        setErrors(e);
+        return Object.keys(e).length === 0;
+      }
+
+      function handleSubmit(e) {
+        e.preventDefault();
+        if (!validate()) return;
+        const data = {
+          person: form.useExisting ? form.person : form.newPerson.trim(),
+          amount: parseFloat(form.amount),
+          currency: form.currency,
+          reason: form.reason.trim(),
+          dateLoaned: form.dateLoaned,
+          expectedBack: form.expectedBack || null,
+          paymentDate: form.paymentDate || null,
+          notes: form.notes.trim(),
+          flagged: initial?.flagged || false,
+        };
+        if (isEdit) {
+          onUpdate(initial.id, { ...data, status: initial.status });
+        } else {
+          onAdd({ ...data, status: 'unpaid' });
+        }
+        onClose();
+      }
+
+      function handleBackdrop(e) { if (e.target === e.currentTarget) onClose(); }
+
+      const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white";
+
+      return (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={handleBackdrop}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center">
+                  {isEdit ? (
+                    <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  )}
+                </div>
+                <h2 className="text-base font-semibold text-gray-900">{isEdit ? 'Edit Loan' : 'Add New Loan'}</h2>
+              </div>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Person / Company</label>
+                {!isEdit && (
+                  <div className="flex gap-1.5 mb-2">
+                    {[{v:true,l:'Existing'},{v:false,l:'New person'}].map(({v,l}) => (
+                      <button key={l} type="button" onClick={() => set('useExisting', v)}
+                        className={`text-xs px-3 py-1 rounded-full border font-medium transition-colors ${form.useExisting === v ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-500 border-gray-300 hover:border-gray-400'}`}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {isEdit ? (
+                  <input value={form.person} onChange={e => set('person', e.target.value)} className={inp} />
+                ) : form.useExisting ? (
+                  <select value={form.person} onChange={e => set('person', e.target.value)} className={inp}>
+                    {persons.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                ) : (
+                  <input value={form.newPerson} onChange={e => set('newPerson', e.target.value)} placeholder="Full name or company" className={inp} />
+                )}
+                {errors.person && <p className="text-xs text-red-500 mt-1">{errors.person}</p>}
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Amount</label>
+                  <input type="number" step="0.01" min="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" className={inp} />
+                  {errors.amount && <p className="text-xs text-red-500 mt-1">{errors.amount}</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Currency</label>
+                  <select value={form.currency} onChange={e => set('currency', e.target.value)} className={inp}>
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="THB">THB (฿)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Reason</label>
+                <input value={form.reason} onChange={e => set('reason', e.target.value)} placeholder="Purpose of the loan" className={inp} />
+                {errors.reason && <p className="text-xs text-red-500 mt-1">{errors.reason}</p>}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date Loaned</label>
+                  <input type="date" value={form.dateLoaned} onChange={e => set('dateLoaned', e.target.value)} className={inp} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Expected Back</label>
+                  <input type="date" value={form.expectedBack} onChange={e => set('expectedBack', e.target.value)} className={inp} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Payment Date <span className="text-gray-400 font-normal normal-case">(if already paid)</span></label>
+                  <input type="date" value={form.paymentDate} onChange={e => set('paymentDate', e.target.value)} className={inp} />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Notes <span className="text-gray-400 font-normal normal-case">(optional)</span></label>
+                <textarea value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Any additional details…" rows={2} className={inp + " resize-none"} />
+              </div>
+
+              <div className="flex gap-2.5 pt-1">
+                <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm">
+                  {isEdit ? 'Save Changes' : 'Add Loan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────
+       RECURRING TAB
+    ───────────────────────────────────────────── */
+    const RENT_LOAN_IDS = [28, 29, 30];
+
+    function RecurringTab({ loans, onToggleStatus, onSetPaymentDate, onEditLoan }) {
+      const payments = loans
+        .filter(l => RENT_LOAN_IDS.includes(l.id))
+        .sort((a, b) => (a.dateLoaned > b.dateLoaned ? 1 : -1));
+
+      const totalPaid    = payments.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
+      const totalUnpaid  = payments.filter(p => p.status === 'unpaid').reduce((s, p) => s + p.amount, 0);
+      const nextUnpaid   = payments.find(p => p.status === 'unpaid');
+
+      return (
+        <div className="space-y-5">
+          {/* ── Recurring item card ── */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+
+            {/* Card header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-gray-900">Michael — Monthly Rent</h3>
+                    <span className="text-[11px] bg-blue-50 text-blue-600 font-semibold px-2 py-0.5 rounded-full">Monthly</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">Due on the 2nd of each month · Started Apr 2026</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                {nextUnpaid ? (
+                  <div className="text-right">
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold">Next due</p>
+                    <p className="text-sm font-semibold text-orange-500">{fmtDate(nextUnpaid.expectedBack)}</p>
+                  </div>
+                ) : (
+                  <span className="text-xs bg-green-50 text-green-600 font-semibold px-2.5 py-1 rounded-full">All paid</span>
+                )}
+                <div className="text-right border-l border-gray-100 pl-3">
+                  <p className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold">Rate</p>
+                  <p className="text-sm font-bold text-gray-900">$3,000<span className="text-xs font-normal text-gray-400">/mo</span></p>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary stats */}
+            <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100 bg-gray-50/40">
+              <div className="px-6 py-3.5 text-center">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Total billed</p>
+                <p className="text-lg font-bold text-gray-900">
+                  ${(totalPaid + totalUnpaid).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-[11px] text-gray-400">{payments.length} entries</p>
+              </div>
+              <div className="px-6 py-3.5 text-center">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Received</p>
+                <p className="text-lg font-bold text-green-600">
+                  ${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-[11px] text-gray-400">{payments.filter(p => p.status === 'paid').length} paid</p>
+              </div>
+              <div className="px-6 py-3.5 text-center">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Outstanding</p>
+                <p className={`text-lg font-bold ${totalUnpaid > 0 ? 'text-orange-500' : 'text-gray-300'}`}>
+                  ${totalUnpaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-[11px] text-gray-400">{payments.filter(p => p.status === 'unpaid').length} unpaid</p>
+              </div>
+            </div>
+
+            {/* Payment history table */}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/70">
+                    <th className="w-12 px-4 py-3 text-center text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Paid</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Description</th>
+                    <th className="px-4 py-3 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Amount</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Due Date</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Payment Date</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="w-10 px-3 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map(p => {
+                    const overdue = p.status === 'unpaid' && p.expectedBack && new Date(p.expectedBack + 'T12:00:00') < new Date();
+                    return (
+                      <tr key={p.id} className="border-b border-gray-50 hover:bg-blue-50/20 transition-colors group">
+                        <td className="px-4 py-3.5 text-center">
+                          <div className="flex justify-center">
+                            <StatusCircle status={p.status} onClick={() => onToggleStatus(p.id)} />
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="text-sm text-gray-700">{p.reason}</span>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <span className={`text-sm font-semibold tabular-nums ${
+                            p.status === 'paid' ? 'text-green-500' : overdue ? 'text-orange-500' : 'text-gray-800'
+                          }`}>
+                            ${p.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <span className="text-sm text-gray-500">{fmtDate(p.dateLoaned)}</span>
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          {p.expectedBack ? (
+                            <span className={`text-sm ${overdue ? 'text-orange-500 font-medium' : 'text-gray-500'}`}>
+                              {overdue && (
+                                <svg className="inline w-3 h-3 mr-1 mb-0.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.072 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                              )}
+                              {fmtDate(p.expectedBack)}
+                            </span>
+                          ) : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          {p.status === 'paid' ? (
+                            <input
+                              type="date"
+                              value={p.paymentDate || ''}
+                              onChange={e => onSetPaymentDate && onSetPaymentDate(p.id, e.target.value)}
+                              className="text-sm text-gray-600 border border-gray-200 rounded-md px-2 py-0.5 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
+                            />
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                            p.status === 'paid'
+                              ? 'bg-green-50 text-green-600'
+                              : overdue
+                              ? 'bg-orange-50 text-orange-600'
+                              : 'bg-gray-100 text-gray-500'
+                          }`}>
+                            {p.status === 'paid' ? '✓ Paid' : overdue ? 'Overdue' : 'Pending'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3.5">
+                          <button onClick={() => onEditLoan && onEditLoan(p)}
+                            className="text-gray-300 hover:text-blue-500 transition-colors p-1 rounded" title="Edit">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Progress bar footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/40">
+              <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                <span>Collection progress</span>
+                <span className="font-semibold text-gray-700">
+                  {totalPaid + totalUnpaid > 0 ? ((totalPaid / (totalPaid + totalUnpaid)) * 100).toFixed(0) : 0}% collected
+                </span>
+              </div>
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-green-500 rounded-full transition-all duration-500"
+                  style={{ width: (totalPaid + totalUnpaid > 0 ? (totalPaid / (totalPaid + totalUnpaid)) * 100 : 0).toFixed(1) + '%' }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────
+       DASHBOARD TAB
+    ───────────────────────────────────────────── */
+    function DashboardTab({ loans }) {
+      /* ── Monthly series ──
+         For each month that has at least one loan loaned on-or-before it,
+         compute: new loans loaned that month + running outstanding balance.
+      */
+      const monthlySeries = useMemo(() => {
+        if (!loans.length) return [];
+        const dates = loans.map(l => l.dateLoaned).filter(Boolean).sort();
+        const first = new Date(dates[0] + 'T12:00:00');
+        const now   = new Date('2026-05-31T12:00:00');
+        const months = [];
+        let cur = new Date(first.getFullYear(), first.getMonth(), 1);
+        while (cur <= now) {
+          const y = cur.getFullYear(), m = cur.getMonth();
+          const label = new Date(y, m, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+          const thisMonth = loans.filter(l => {
+            const d = new Date(l.dateLoaned + 'T12:00:00');
+            return d.getFullYear() === y && d.getMonth() === m;
+          });
+          const paidAmt   = thisMonth.filter(l => l.status === 'paid').reduce((s,l) => s + l.amount, 0);
+          const unpaidAmt = thisMonth.filter(l => l.status === 'unpaid').reduce((s,l) => s + l.amount, 0);
+          const total     = paidAmt + unpaidAmt;
+          months.push({ label, y, m, paidAmt, unpaidAmt, total });
+          cur = new Date(y, m + 1, 1);
+        }
+        return months;
+      }, [loans]);
+
+      /* ── Combined summary (loans + recurring) ── */
+      const combinedStats = useMemo(() => {
+        const allPaid   = loans.filter(l => l.status === 'paid');
+        const allUnpaid = loans.filter(l => l.status === 'unpaid');
+        const loanOnly  = loans.filter(l => !RENT_LOAN_IDS.includes(l.id));
+        const rentOnly  = loans.filter(l => RENT_LOAN_IDS.includes(l.id));
+        return {
+          totalLoaned:    loans.reduce((s,l) => s + l.amount, 0),
+          totalPaid:      allPaid.reduce((s,l) => s + l.amount, 0),
+          totalUnpaid:    allUnpaid.reduce((s,l) => s + l.amount, 0),
+          paidCount:      allPaid.length,
+          unpaidCount:    allUnpaid.length,
+          loansPaid:      loanOnly.filter(l => l.status === 'paid').reduce((s,l) => s + l.amount, 0),
+          loansUnpaid:    loanOnly.filter(l => l.status === 'unpaid').reduce((s,l) => s + l.amount, 0),
+          recurringPaid:  rentOnly.filter(l => l.status === 'paid').reduce((s,l) => s + l.amount, 0),
+          recurringUnpaid:rentOnly.filter(l => l.status === 'unpaid').reduce((s,l) => s + l.amount, 0),
+        };
+      }, [loans]);
+
+      /* ── Per-person stats ── */
+      const personStats = useMemo(() => {
+        const people = [...new Set(loans.map(l => l.person))].sort();
+        return people.map(person => {
+          const all    = loans.filter(l => l.person === person);
+          const paid   = all.filter(l => l.status === 'paid');
+          const unpaid = all.filter(l => l.status === 'unpaid');
+          const totalLoanedUSD  = all.filter(l => l.currency === 'USD').reduce((s,l) => s + l.amount, 0);
+          const totalLoanedEUR  = all.filter(l => l.currency === 'EUR').reduce((s,l) => s + l.amount, 0);
+          const totalPaidUSD    = paid.filter(l => l.currency === 'USD').reduce((s,l) => s + l.amount, 0);
+          const totalPaidEUR    = paid.filter(l => l.currency === 'EUR').reduce((s,l) => s + l.amount, 0);
+          const outstandingUSD  = unpaid.filter(l => l.currency === 'USD').reduce((s,l) => s + l.amount, 0);
+          const outstandingEUR  = unpaid.filter(l => l.currency === 'EUR').reduce((s,l) => s + l.amount, 0);
+          const pctUSD = totalLoanedUSD > 0 ? (totalPaidUSD / totalLoanedUSD) * 100 : 0;
+          const pctEUR = totalLoanedEUR > 0 ? (totalPaidEUR / totalLoanedEUR) * 100 : 0;
+          return {
+            person, totalLoanedUSD, totalLoanedEUR,
+            totalPaidUSD, totalPaidEUR,
+            outstandingUSD, outstandingEUR,
+            paidCount: paid.length, openCount: unpaid.length, total: all.length,
+            pctUSD, pctEUR,
+          };
+        });
+      }, [loans]);
+
+      /* ── Bar chart helpers ── */
+      const maxOut = Math.max(...monthlySeries.map(m => m.total), 1);
+      const CHART_H = 140;
+
+      function barPx(val) { return Math.max(0, (val / maxOut) * CHART_H); }
+
+      function fmtK(n) {
+        if (n >= 1000) return '$' + (n / 1000).toFixed(n % 1000 === 0 ? 0 : 1) + 'k';
+        return '$' + n.toFixed(0);
+      }
+
+      const [hoveredMonth, setHoveredMonth] = useState(null);
+
+      return (
+        <div className="space-y-6">
+
+          {/* ── COMBINED SUMMARY ── */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-900">Overall Summary</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Loans + Recurring combined</p>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100">
+              {[
+                { label:'Total Loaned', value:`$${combinedStats.totalLoaned.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`, sub:`${loans.length} entries`, accent:'text-gray-900' },
+                { label:'Total Paid', value:`$${combinedStats.totalPaid.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`, sub:`${combinedStats.paidCount} paid`, accent:'text-green-600' },
+                { label:'Total Unpaid', value:`$${combinedStats.totalUnpaid.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`, sub:`${combinedStats.unpaidCount} open`, accent:'text-red-500' },
+                { label:'Recovery Rate', value:`${combinedStats.totalLoaned > 0 ? ((combinedStats.totalPaid/combinedStats.totalLoaned)*100).toFixed(1) : 0}%`, sub:'of total collected', accent:'text-blue-600' },
+              ].map(c => (
+                <div key={c.label} className="px-6 py-5 flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">{c.label}</span>
+                  <span className={`text-2xl font-bold ${c.accent}`}>{c.value}</span>
+                  <span className="text-xs text-gray-400">{c.sub}</span>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 divide-x divide-gray-100 border-t border-gray-100 bg-gray-50/40">
+              <div className="px-6 py-4">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Loans</p>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="text-gray-600">Paid: <span className="font-semibold text-green-600">${combinedStats.loansPaid.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-gray-600">Outstanding: <span className="font-semibold text-red-500">${combinedStats.loansUnpaid.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>
+                </div>
+              </div>
+              <div className="px-6 py-4">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Recurring (Rent)</p>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="text-gray-600">Paid: <span className="font-semibold text-green-600">${combinedStats.recurringPaid.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-gray-600">Outstanding: <span className="font-semibold text-red-500">${combinedStats.recurringUnpaid.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── MONTHLY LOANS CHART ── */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900">Monthly Loans Issued</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">New loans issued per month — paid vs unpaid</p>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm bg-green-500 inline-block"></span> Paid
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm bg-red-500 inline-block"></span> Unpaid
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 overflow-x-auto">
+              <div className="flex items-end gap-3 min-w-max" style={{height: CHART_H + 44 + 'px'}}>
+                {monthlySeries.map((mo, i) => {
+                  const totalH  = barPx(mo.total);
+                  const paidH   = mo.total > 0 ? (mo.paidAmt / mo.total) * totalH : 0;
+                  const unpaidH = totalH - paidH;
+                  const isHov   = hoveredMonth === i;
+                  return (
+                    <div key={i}
+                      className="flex flex-col items-center gap-1 cursor-default"
+                      onMouseEnter={() => setHoveredMonth(i)}
+                      onMouseLeave={() => setHoveredMonth(null)}
+                    >
+                      {/* Tooltip */}
+                      <div className={`mb-1 bg-gray-900 text-white text-[11px] rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg transition-opacity duration-150 ${isHov ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                        <div className="font-semibold mb-0.5">{mo.label}</div>
+                        <div className="text-green-300">Paid: ${mo.paidAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                        <div className="text-red-300">Unpaid: ${mo.unpaidAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                        <div className="text-gray-400 text-[10px] mt-0.5">Total: ${mo.total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                      </div>
+
+                      {/* Stacked bar */}
+                      <div className="relative" style={{height: CHART_H + 'px', width: '40px'}}>
+                        {mo.total > 0 && (
+                          <div style={{position:'absolute', bottom:0, left:0, right:0, height: totalH + 'px', display:'flex', flexDirection:'column'}}>
+                            {unpaidH > 0 && (
+                              <div style={{
+                                height: unpaidH + 'px',
+                                backgroundColor: isHov ? '#f87171' : '#ef4444',
+                                borderRadius: paidH === 0 ? '4px 4px 0 0' : '4px 4px 0 0',
+                                transition: 'background-color 0.15s',
+                              }} />
+                            )}
+                            {paidH > 0 && (
+                              <div style={{
+                                height: paidH + 'px',
+                                backgroundColor: isHov ? '#4ade80' : '#22c55e',
+                                borderRadius: unpaidH === 0 ? '4px 4px 0 0' : '0',
+                                transition: 'background-color 0.15s',
+                              }} />
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Label */}
+                      <span className={`text-[10px] font-medium mt-1 ${isHov ? 'text-gray-700' : 'text-gray-400'}`}>{mo.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Y-axis guide labels */}
+              <div className="flex justify-between text-[10px] text-gray-300 mt-1 border-t border-gray-100 pt-2">
+                <span>$0</span>
+                <span>{fmtK(maxOut * 0.5)}</span>
+                <span>{fmtK(maxOut)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── PER-PERSON BREAKDOWN ── */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-900">Per-Person Breakdown</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Total loaned, amount paid back, and current outstanding per person</p>
+            </div>
+
+            <div className="divide-y divide-gray-50">
+              {personStats.map(ps => (
+                <div key={ps.person} className="px-6 py-5">
+                  {/* Person header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-gray-900">{ps.person}</span>
+                        <span className="ml-2 text-xs text-gray-400">{ps.openCount} open · {ps.paidCount} paid · {ps.total} total</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      {ps.outstandingUSD > 0 && (
+                        <span className="bg-red-50 text-red-600 font-semibold px-2.5 py-1 rounded-full">
+                          Owes ${ps.outstandingUSD.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                        </span>
+                      )}
+                      {ps.outstandingEUR > 0 && (
+                        <span className="bg-blue-50 text-blue-600 font-semibold px-2.5 py-1 rounded-full">
+                          Owes €{ps.outstandingEUR.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                        </span>
+                      )}
+                      {ps.outstandingUSD === 0 && ps.outstandingEUR === 0 && (
+                        <span className="bg-green-50 text-green-600 font-semibold px-2.5 py-1 rounded-full">All paid</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* USD row */}
+                  {ps.totalLoanedUSD > 0 && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="font-medium text-gray-500">USD</span>
+                        <div className="flex items-center gap-4 text-gray-500 tabular-nums">
+                          <span>Loaned: <span className="font-semibold text-gray-700">${ps.totalLoanedUSD.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>
+                          <span>Paid: <span className="font-semibold text-green-600">${ps.totalPaidUSD.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>
+                          <span>Still owes: <span className="font-semibold text-red-500">${ps.outstandingUSD.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>
+                        </div>
+                      </div>
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 rounded-full transition-all duration-500"
+                          style={{width: ps.pctUSD.toFixed(1) + '%'}}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                        <span>{ps.pctUSD.toFixed(0)}% repaid</span>
+                        <span>{(100 - ps.pctUSD).toFixed(0)}% outstanding</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* EUR row */}
+                  {ps.totalLoanedEUR > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="font-medium text-gray-500">EUR</span>
+                        <div className="flex items-center gap-4 text-gray-500 tabular-nums">
+                          <span>Loaned: <span className="font-semibold text-gray-700">€{ps.totalLoanedEUR.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>
+                          <span>Paid: <span className="font-semibold text-green-600">€{ps.totalPaidEUR.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>
+                          <span>Still owes: <span className="font-semibold text-red-500">€{ps.outstandingEUR.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></span>
+                        </div>
+                      </div>
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-400 rounded-full transition-all duration-500"
+                          style={{width: ps.pctEUR.toFixed(1) + '%'}}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                        <span>{ps.pctEUR.toFixed(0)}% repaid</span>
+                        <span>{(100 - ps.pctEUR).toFixed(0)}% outstanding</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────
+       SORT ICON
+    ───────────────────────────────────────────── */
+    function SortIcon({ col, sortConfig }) {
+      if (sortConfig.key !== col) {
+        return (
+          <svg className="inline w-3 h-3 text-gray-300 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+          </svg>
+        );
+      }
+      return (
+        <svg className="inline w-3 h-3 text-blue-600 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+            d={sortConfig.direction === 'asc' ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} />
+        </svg>
+      );
+    }
+
+    /* ─────────────────────────────────────────────
+       MAIN APP
+    ───────────────────────────────────────────── */
+    function App() {
+      const [loans, setLoans]             = useState(INITIAL_LOANS);
+      const [nextId, setNextId]           = useState(34);
+      const [activeTab, setActiveTab]     = useState('loans');
+      const [selYear, setSelYear]         = useState('2026');
+      const [selMonth, setSelMonth]       = useState('05');
+      const [filterPerson, setFilterPerson] = useState('all');
+      const [groupBy, setGroupBy]         = useState(false);
+      const [sortConfig, setSortConfig]   = useState({ key: 'dateLoaned', direction: 'asc' });
+      const [showModal, setShowModal]     = useState(false);
+      const [editingLoan, setEditingLoan]  = useState(null);
+
+      const persons = useMemo(
+        () => [...new Set(loans.filter(l => !RENT_LOAN_IDS.includes(l.id)).map(l => l.person))].sort(),
+        [loans]
+      );
+
+      /* Summaries — loans tab only (excludes recurring) */
+      const stats = useMemo(() => {
+        const loanOnly = loans.filter(l => !RENT_LOAN_IDS.includes(l.id));
+        const unpaid = loanOnly.filter(l => l.status === 'unpaid');
+        const paid   = loanOnly.filter(l => l.status === 'paid');
+        return {
+          eurOut:      unpaid.filter(l => l.currency === 'EUR').reduce((s,l) => s + l.amount, 0),
+          usdOut:      unpaid.filter(l => l.currency === 'USD').reduce((s,l) => s + l.amount, 0),
+          thbOut:      unpaid.filter(l => l.currency === 'THB').reduce((s,l) => s + l.amount, 0),
+          eurPaid:     paid.filter(l => l.currency === 'EUR').reduce((s,l) => s + l.amount, 0),
+          usdPaid:     paid.filter(l => l.currency === 'USD').reduce((s,l) => s + l.amount, 0),
+          thbPaid:     paid.filter(l => l.currency === 'THB').reduce((s,l) => s + l.amount, 0),
+          openCnt:     unpaid.length,
+          paidCnt:     paid.length,
+          eurOpen:     unpaid.filter(l => l.currency === 'EUR').length,
+          usdOpen:     unpaid.filter(l => l.currency === 'USD').length,
+          thbOpen:     unpaid.filter(l => l.currency === 'THB').length,
+          eurPaidCnt:  paid.filter(l => l.currency === 'EUR').length,
+          usdPaidCnt:  paid.filter(l => l.currency === 'USD').length,
+          thbPaidCnt:  paid.filter(l => l.currency === 'THB').length,
+        };
+      }, [loans]);
+
+      /* Filtered + sorted rows (loans tab — no recurring) */
+      const filteredLoans = useMemo(() => {
+        let rows = loans.filter(l => !RENT_LOAN_IDS.includes(l.id));
+        if (filterPerson !== 'all') rows = rows.filter(l => l.person === filterPerson);
+        if (sortConfig.key) {
+          rows.sort((a, b) => {
+            let av = a[sortConfig.key], bv = b[sortConfig.key];
+            if (typeof av === 'string') av = av.toLowerCase();
+            if (typeof bv === 'string') bv = bv.toLowerCase();
+            av = av ?? '';
+            bv = bv ?? '';
+            if (av < bv) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (av > bv) return sortConfig.direction === 'asc' ?  1 : -1;
+            return 0;
+          });
+        }
+        return rows;
+      }, [loans, filterPerson, sortConfig]);
+
+      /* Grouped rows */
+      const grouped = useMemo(() => {
+        if (!groupBy) return { '__all__': filteredLoans };
+        return filteredLoans.reduce((acc, loan) => {
+          if (!acc[loan.person]) acc[loan.person] = [];
+          acc[loan.person].push(loan);
+          return acc;
+        }, {});
+      }, [filteredLoans, groupBy]);
+
+      /* Per-person totals */
+      function personTotals(person) {
+        const base = loans.filter(l => l.person === person && !RENT_LOAN_IDS.includes(l.id));
+        const open = base.filter(l => l.status === 'unpaid');
+        return {
+          usd:   open.filter(l => l.currency === 'USD').reduce((s,l) => s + l.amount, 0),
+          eur:   open.filter(l => l.currency === 'EUR').reduce((s,l) => s + l.amount, 0),
+          openN: open.length,
+          total: base.length,
+        };
+      }
+
+      /* Actions */
+      function toggleStatus(id) {
+        const today = new Date().toISOString().split('T')[0];
+        setLoans(prev => prev.map(l => {
+          if (l.id !== id) return l;
+          const nowPaid = l.status !== 'paid';
+          return { ...l, status: nowPaid ? 'paid' : 'unpaid', paymentDate: nowPaid ? today : null };
+        }));
+      }
+      function setPaymentDate(id, date) {
+        setLoans(prev => prev.map(l => l.id === id ? { ...l, paymentDate: date || null } : l));
+      }
+      function setCurrency(id, currency) {
+        setLoans(prev => prev.map(l => l.id === id ? {...l, currency} : l));
+      }
+      function deleteLoan(id) {
+        if (!window.confirm('Delete this loan entry?')) return;
+        setLoans(prev => prev.filter(l => l.id !== id));
+      }
+      function addLoan(data) {
+        setLoans(prev => [...prev, { id: nextId, ...data }]);
+        setNextId(n => n + 1);
+      }
+      function updateLoan(id, data) {
+        setLoans(prev => prev.map(l => l.id === id ? { ...l, ...data } : l));
+      }
+      function handleSort(key) {
+        setSortConfig(prev => ({
+          key,
+          direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+        }));
+      }
+
+      const thCls = (col) =>
+        "px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-gray-600 transition-colors";
+
+      return (
+        <div className="min-h-screen bg-gray-50">
+
+          {/* ══════════ HEADER ══════════ */}
+          <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+            <div className="max-w-screen-2xl mx-auto px-5 py-3 flex items-center justify-between gap-4">
+
+              {/* Logo + Title */}
+              <div className="flex items-center gap-2.5 shrink-0">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+                  <svg className="w-4.5 h-4.5 text-white w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <span className="text-[15px] font-bold text-gray-900 tracking-tight">Financial Dashboard</span>
+              </div>
+
+              {/* Centre controls */}
+              <div className="flex items-center gap-3">
+                {/* Month / Year picker */}
+                <div className="flex items-center gap-1.5 bg-gray-100 rounded-lg px-3 py-1.5 text-sm">
+                  <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <select value={selMonth} onChange={e => setSelMonth(e.target.value)}
+                    className="bg-transparent text-sm font-medium text-gray-700 focus:outline-none cursor-pointer">
+                    {MONTHS.map((m,i) => (
+                      <option key={m} value={String(i+1).padStart(2,'0')}>{m}</option>
+                    ))}
+                  </select>
+                  <select value={selYear} onChange={e => setSelYear(e.target.value)}
+                    className="bg-transparent text-sm font-medium text-gray-700 focus:outline-none cursor-pointer">
+                    {[2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Upload button */}
+              <button className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm shrink-0">
+                <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Upload CSV / PDF
+              </button>
+            </div>
+          </header>
+
+          {/* ══════════ TAB NAV ══════════ */}
+          <div className="bg-white border-b border-gray-200">
+            <div className="max-w-screen-2xl mx-auto px-5">
+              <nav className="flex gap-0.5 overflow-x-auto">
+                {TABS.map(tab => (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                    className={`tab-btn flex items-center gap-1.5 px-4 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all ${
+                      activeTab === tab.id
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200'
+                    }`}>
+                    {tab.label}
+                    {tab.badge && (
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-semibold leading-none ${
+                        tab.badgeType === 'orange'
+                          ? 'bg-orange-100 text-orange-600'
+                          : 'bg-blue-100 text-blue-600'
+                      }`}>
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </nav>
+            </div>
+          </div>
+
+          {/* ══════════ MAIN ══════════ */}
+          <main className="max-w-screen-2xl mx-auto px-5 py-6">
+
+            {activeTab === 'dashboard' ? (
+              <DashboardTab loans={loans} />
+            ) : activeTab === 'recurring' ? (
+              <RecurringTab loans={loans} onToggleStatus={toggleStatus} onSetPaymentDate={setPaymentDate} onEditLoan={setEditingLoan} />
+            ) : activeTab === 'loans' ? (
+              <>
+                {/* ── SUMMARY CARDS ── */}
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                  <SummaryCard
+                    title="Outstanding EUR"
+                    value={`€${stats.eurOut.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`}
+                    subtitle={`${stats.eurOpen} unpaid loan${stats.eurOpen !== 1 ? 's' : ''}`}
+                    accent="text-orange-500"
+                  />
+                  <SummaryCard
+                    title="Outstanding USD"
+                    value={`$${stats.usdOut.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`}
+                    subtitle={`${stats.usdOpen} unpaid loan${stats.usdOpen !== 1 ? 's' : ''}`}
+                    accent="text-orange-500"
+                  />
+                  <SummaryCard
+                    title="Open Loans"
+                    value={stats.openCnt}
+                    subtitle="across all persons"
+                    accent="text-gray-900"
+                  />
+                  <SummaryCard
+                    title="Paid EUR"
+                    value={`€${stats.eurPaid.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`}
+                    subtitle={`${stats.eurPaidCnt} loan${stats.eurPaidCnt !== 1 ? 's' : ''} paid back`}
+                    accent="text-green-600"
+                  />
+                  <SummaryCard
+                    title="Paid USD"
+                    value={`$${stats.usdPaid.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`}
+                    subtitle={`${stats.usdPaidCnt} loan${stats.usdPaidCnt !== 1 ? 's' : ''} paid back`}
+                    accent="text-green-600"
+                  />
+                  <SummaryCard
+                    title="Paid Back"
+                    value={stats.paidCnt}
+                    subtitle="completed loans"
+                    accent="text-gray-900"
+                  />
+                </div>
+
+                {/* ── LOANS PANEL ── */}
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+
+                  {/* Panel header */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
+                    <div className="flex items-center gap-2.5">
+                      <h2 className="text-sm font-semibold text-gray-900">Loans</h2>
+                      <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{loans.length}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Filter */}
+                      <div className="relative">
+                        <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+                        </svg>
+                        <select value={filterPerson} onChange={e => setFilterPerson(e.target.value)}
+                          className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer">
+                          <option value="all">All Persons</option>
+                          {persons.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Group by person toggle */}
+                      <button onClick={() => setGroupBy(g => !g)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-all ${
+                          groupBy
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'text-gray-600 border-gray-300 hover:bg-gray-50'
+                        }`}>
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h8" />
+                        </svg>
+                        Group by Person
+                      </button>
+
+                      {/* Add loan */}
+                      <button onClick={() => setShowModal(true)}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Loan
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50/70 border-b border-gray-100">
+                          <th className="w-12 px-4 py-3 text-center text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className={thCls('person')} onClick={() => handleSort('person')}>
+                            Person <SortIcon col="person" sortConfig={sortConfig} />
+                          </th>
+                          <th className="px-4 py-3 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-gray-600 transition-colors"
+                              onClick={() => handleSort('amount')}>
+                            Amount <SortIcon col="amount" sortConfig={sortConfig} />
+                          </th>
+                          <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Currency</th>
+                          <th className={thCls('reason')} onClick={() => handleSort('reason')}>
+                            Reason <SortIcon col="reason" sortConfig={sortConfig} />
+                          </th>
+                          <th className={thCls('dateLoaned')} onClick={() => handleSort('dateLoaned')}>
+                            Date Loaned <SortIcon col="dateLoaned" sortConfig={sortConfig} />
+                          </th>
+                          <th className={thCls('expectedBack')} onClick={() => handleSort('expectedBack')}>
+                            Expected Back <SortIcon col="expectedBack" sortConfig={sortConfig} />
+                          </th>
+                          <th className={thCls('paymentDate')} onClick={() => handleSort('paymentDate')}>
+                            Payment Date <SortIcon col="paymentDate" sortConfig={sortConfig} />
+                          </th>
+                          <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Notes</th>
+                          <th className="w-10 px-3 py-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(grouped).map(([group, rows]) => {
+                          const t = group !== '__all__' ? personTotals(group) : null;
+                          return (
+                            <React.Fragment key={group}>
+                              {/* Group header */}
+                              {groupBy && (
+                                <tr className="bg-gray-50 border-y border-gray-150">
+                                  <td colSpan={10} className="px-4 py-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                                          <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                                          </svg>
+                                        </div>
+                                        <span className="text-sm font-semibold text-gray-800">{group}</span>
+                                      </div>
+                                      <div className="flex items-center gap-3 text-xs">
+                                        {t && (t.usd > 0 || t.eur > 0) && (
+                                          <span className="text-gray-500">
+                                            Outstanding:&nbsp;
+                                            {t.usd > 0 && <span className="font-semibold text-green-600">${t.usd.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>}
+                                            {t.usd > 0 && t.eur > 0 && <span className="text-gray-400"> + </span>}
+                                            {t.eur > 0 && <span className="font-semibold text-blue-600">€{t.eur.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>}
+                                          </span>
+                                        )}
+                                        {t && (
+                                          <span className="bg-gray-200/80 text-gray-600 px-2 py-0.5 rounded-full font-medium">
+                                            {t.openN} open · {t.total} total
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+
+                              {/* Loan rows */}
+                              {rows.map((loan) => {
+                                const overdue = isOverdue(loan.expectedBack, loan.status);
+                                return (
+                                  <tr key={loan.id}
+                                    className="border-b border-gray-50 hover:bg-blue-50/20 transition-colors group">
+                                    {/* Status */}
+                                    <td className="px-4 py-3 text-center">
+                                      <div className="flex justify-center">
+                                        <StatusCircle status={loan.status} onClick={() => toggleStatus(loan.id)} />
+                                      </div>
+                                    </td>
+
+                                    {/* Person */}
+                                    <td className="px-4 py-3">
+                                      <span className="text-sm text-gray-700">{loan.person}</span>
+                                    </td>
+
+                                    {/* Amount */}
+                                    <td className="px-4 py-3 text-right">
+                                      <span className={`text-sm font-semibold tabular-nums ${
+                                        loan.status === 'paid'
+                                          ? 'text-green-500 line-through opacity-60'
+                                          : loan.flagged
+                                          ? 'text-orange-500'
+                                          : loan.amount >= 5000
+                                          ? 'text-green-700 font-bold'
+                                          : 'text-green-600'
+                                      }`}>
+                                        {loan.flagged && loan.status !== 'paid' && (
+                                          <span className="inline-block w-1.5 h-1.5 bg-orange-400 rounded-full mr-1.5 mb-0.5 align-middle"></span>
+                                        )}
+                                        {fmtMoney(loan.amount, loan.currency)}
+                                      </span>
+                                    </td>
+
+                                    {/* Currency */}
+                                    <td className="px-4 py-3">
+                                      <select
+                                        value={loan.currency}
+                                        onChange={e => setCurrency(loan.id, e.target.value)}
+                                        className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-600 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer hover:border-gray-300 transition-colors">
+                                        <option value="USD">USD</option>
+                                        <option value="EUR">EUR</option>
+                                        <option value="THB">THB</option>
+                                      </select>
+                                    </td>
+
+                                    {/* Reason */}
+                                    <td className="px-4 py-3 max-w-[200px]">
+                                      <span className="text-sm text-gray-600 truncate block" title={loan.reason}>
+                                        {loan.reason || <span className="text-gray-300">—</span>}
+                                      </span>
+                                    </td>
+
+                                    {/* Date Loaned */}
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <span className="text-sm text-gray-500">{fmtDate(loan.dateLoaned)}</span>
+                                    </td>
+
+                                    {/* Expected Back */}
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      {loan.expectedBack ? (
+                                        <span className={`text-sm ${overdue ? 'text-orange-500 font-medium' : 'text-gray-500'}`}>
+                                          {overdue && (
+                                            <svg className="inline w-3 h-3 mr-1 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.072 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                            </svg>
+                                          )}
+                                          {fmtDate(loan.expectedBack)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-300">—</span>
+                                      )}
+                                    </td>
+
+                                    {/* Payment Date */}
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      {loan.status === 'paid' ? (
+                                        <input
+                                          type="date"
+                                          value={loan.paymentDate || ''}
+                                          onChange={e => setPaymentDate(loan.id, e.target.value)}
+                                          className="text-sm text-gray-600 border border-gray-200 rounded-md px-2 py-0.5 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
+                                        />
+                                      ) : (
+                                        <span className="text-gray-300">—</span>
+                                      )}
+                                    </td>
+
+                                    {/* Notes */}
+                                    <td className="px-4 py-3 max-w-[180px]">
+                                      <span className="text-sm text-gray-400 truncate block" title={loan.notes}>
+                                        {loan.notes || <span className="text-gray-200">—</span>}
+                                      </span>
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td className="px-3 py-3">
+                                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                                        <button onClick={() => setEditingLoan(loan)}
+                                          className="text-gray-300 hover:text-blue-500 transition-colors p-1 rounded" title="Edit">
+                                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                          </svg>
+                                        </button>
+                                        <button onClick={() => deleteLoan(loan.id)}
+                                          className="text-gray-300 hover:text-red-400 transition-colors p-1 rounded" title="Delete">
+                                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </React.Fragment>
+                          );
+                        })}
+
+                        {filteredLoans.length === 0 && (
+                          <tr>
+                            <td colSpan={10} className="px-4 py-12 text-center text-sm text-gray-400">
+                              No loans found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Table footer */}
+                  <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
+                    <span className="text-xs text-gray-400">{filteredLoans.length} loan{filteredLoans.length !== 1 ? 's' : ''} shown</span>
+                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <span>
+                        Total outstanding:&nbsp;
+                        <span className="font-semibold text-green-600">
+                          ${stats.usdOut.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                        </span>
+                        &nbsp;USD
+                      </span>
+                      <span className="text-gray-300">+</span>
+                      <span>
+                        <span className="font-semibold text-blue-600">
+                          €{stats.eurOut.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                        </span>
+                        &nbsp;EUR
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </>
+
+            ) : (
+              /* Placeholder for other tabs */
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-16 text-center">
+                <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <p className="text-sm font-semibold text-gray-600 mb-1">{TABS.find(t => t.id === activeTab)?.label}</p>
+                <p className="text-sm text-gray-400">This section is coming soon.</p>
+              </div>
+            )}
+          </main>
+
+          {/* ══════════ MODALS ══════════ */}
+          {showModal && (
+            <AddLoanModal
+              onClose={() => setShowModal(false)}
+              onAdd={addLoan}
+              persons={persons}
+            />
+          )}
+          {editingLoan && (
+            <AddLoanModal
+              onClose={() => setEditingLoan(null)}
+              onUpdate={updateLoan}
+              persons={[...new Set(loans.map(l => l.person))].sort()}
+              initial={editingLoan}
+            />
+          )}
+        </div>
+      );
+    }
+
+    /* ── mount ── */
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
